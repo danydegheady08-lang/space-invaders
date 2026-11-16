@@ -5,6 +5,7 @@
 
 from pygame import *
 import sys
+import json
 from os.path import abspath, dirname
 from random import choice
 
@@ -33,6 +34,11 @@ IMAGES = {name: image.load(IMAGE_PATH + '{}.png'.format(name)).convert_alpha()
           for name in IMG_NAMES}
 
 BLOCKERS_POSITION = 450
+
+# High scores are saved as a JSON list of integers next to the game files
+HIGHSCORE_FILE = BASE_PATH + '/highscores.json'
+MAX_HIGHSCORES = 5
+HIGHSCORE_SCREEN_MS = 9000  # the screen closes by itself after this long
 ENEMY_DEFAULT_POSITION = 65  # Initial value for a new game
 ENEMY_MOVE_DOWN = 35
 
@@ -326,6 +332,29 @@ class Text(object):
         surface.blit(self.surface, self.rect)
 
 
+def load_highscores():
+    """Read the saved scores, best first. A missing or damaged file simply
+    means there are no scores yet."""
+    try:
+        with open(HIGHSCORE_FILE) as f:
+            scores = [int(s) for s in json.load(f)]
+    except (OSError, ValueError, TypeError):
+        return []
+    return sorted(scores, reverse=True)[:MAX_HIGHSCORES]
+
+
+def save_highscore(score):
+    """Add one score, keep the best MAX_HIGHSCORES and write them back.
+    Returns the new list so the caller does not have to read the file again."""
+    scores = sorted(load_highscores() + [score], reverse=True)[:MAX_HIGHSCORES]
+    try:
+        with open(HIGHSCORE_FILE, 'w') as f:
+            json.dump(scores, f)
+    except OSError:
+        pass  # a read-only folder must never crash the game
+    return scores
+
+
 class SpaceInvaders(object):
     def __init__(self):
         # It seems, in Linux buffersize=512 is not enough, use 4096 to prevent:
@@ -359,6 +388,10 @@ class SpaceInvaders(object):
         self.life3 = Life(769, 3)
         self.livesGroup = sprite.Group(self.life1, self.life2, self.life3)
 
+        self.scoreSaved = True  # nothing to save before the first game
+        self.gameOverTimer = 0
+        self.highScoreScreen = []
+
     def reset(self, score):
         self.player = Ship()
         self.playerGroup = sprite.Group(self.player)
@@ -379,6 +412,7 @@ class SpaceInvaders(object):
         self.create_audio()
         self.makeNewShip = False
         self.shipAlive = True
+        self.scoreSaved = False
 
     def make_blockers(self, number):
         blockerGroup = sprite.Group()
@@ -551,9 +585,33 @@ class SpaceInvaders(object):
             self.makeNewShip = False
             self.shipAlive = True
 
+    def finish_game(self, currentTime):
+        """Runs once per game, the moment the game is over: save the score
+        and prepare the high score screen."""
+        scores = save_highscore(self.score)
+        self.build_highscore_screen(scores, self.score)
+        self.gameOverTimer = currentTime
+        self.scoreSaved = True
+
+    def build_highscore_screen(self, scores, score):
+        texts = [Text(FONT, 40, 'High Scores', WHITE, 235, 90)]
+        marked = False  # highlight only one row if several scores are equal
+        for place, value in enumerate(scores):
+            isNew = value == score and not marked
+            marked = marked or isNew
+            texts.append(Text(FONT, 25, '{}.   {}'.format(place + 1, value),
+                              GREEN if isNew else WHITE, 300, 175 + place * 50))
+        if scores and score > 0 and score == scores[0]:
+            texts.append(Text(FONT, 20, 'New high score!', YELLOW, 285, 435))
+        texts.append(Text(FONT, 20, 'Your score   {}'.format(score), BLUE,
+                          275, 475))
+        texts.append(Text(FONT, 15, 'Press any key to continue', WHITE,
+                          250, 540))
+        self.highScoreScreen = texts
+
     def create_game_over(self, currentTime):
         self.screen.blit(self.background, (0, 0))
-        passed = currentTime - self.timer
+        passed = currentTime - self.gameOverTimer
         if passed < 750:
             self.gameOverText.draw(self.screen)
         elif 750 < passed < 1500:
@@ -563,11 +621,16 @@ class SpaceInvaders(object):
         elif 2250 < passed < 2750:
             self.screen.blit(self.background, (0, 0))
         elif passed > 3000:
-            self.mainScreen = True
+            for text in self.highScoreScreen:
+                text.draw(self.screen)
+            if passed > HIGHSCORE_SCREEN_MS:
+                self.mainScreen = True
 
         for e in event.get():
             if self.should_exit(e):
                 sys.exit()
+            if e.type == KEYUP and passed > 3000:
+                self.mainScreen = True
 
     def main(self):
         while True:
@@ -635,6 +698,8 @@ class SpaceInvaders(object):
                 currentTime = time.get_ticks()
                 # Reset enemy starting position
                 self.enemyPosition = ENEMY_DEFAULT_POSITION
+                if not self.scoreSaved:
+                    self.finish_game(currentTime)
                 self.create_game_over(currentTime)
 
             display.update()

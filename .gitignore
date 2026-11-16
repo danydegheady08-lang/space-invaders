@@ -1,1 +1,3 @@
 .DS_Store
+# Space Invaders high scores (local data)
+highscores.json
