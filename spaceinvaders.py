@@ -352,6 +352,7 @@ class SpaceInvaders(object):
         self.enemy4Text = Text(FONT, 25, '   =  ?????', RED, 368, 420)
         self.scoreText = Text(FONT, 20, 'Score', WHITE, 5, 5)
         self.livesText = Text(FONT, 20, 'Lives ', WHITE, 640, 5)
+        self.yearText = Text(FONT, 15, '2026', WHITE, 372, 560)
 
         self.life1 = Life(715, 3)
         self.life2 = Life(742, 3)
@@ -578,6 +579,7 @@ class SpaceInvaders(object):
                 self.enemy2Text.draw(self.screen)
                 self.enemy3Text.draw(self.screen)
                 self.enemy4Text.draw(self.screen)
+                self.yearText.draw(self.screen)
                 self.create_main_menu()
                 for e in event.get():
                     if self.should_exit(e):
