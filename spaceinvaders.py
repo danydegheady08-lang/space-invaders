@@ -42,7 +42,7 @@ class Ship(sprite.Sprite):
         sprite.Sprite.__init__(self)
         self.image = IMAGES['ship']
         self.rect = self.image.get_rect(topleft=(375, 540))
-        self.speed = 5
+        self.speed = 10
 
     def update(self, keys, *args):
         if keys[K_LEFT] and self.rect.x > 10:
